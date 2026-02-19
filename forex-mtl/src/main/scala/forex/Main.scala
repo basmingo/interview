@@ -1,10 +1,14 @@
 package forex
 
-import scala.concurrent.ExecutionContext
 import cats.effect._
+import com.github.benmanes.caffeine.cache.{ Caffeine => CaffeineBuilder }
 import forex.config._
+import forex.domain.Rate
+import forex.services.CacheServices
 import fs2.Stream
 import org.http4s.blaze.server.BlazeServerBuilder
+
+import scala.concurrent.ExecutionContext
 
 object Main extends IOApp {
 
@@ -18,7 +22,14 @@ class Application[F[_]: ConcurrentEffect: Timer] {
   def stream(ec: ExecutionContext): Stream[F, Unit] =
     for {
       config <- Config.stream("app")
-      module = new Module[F](config)
+      caffeineCache <- Stream.eval(Sync[F].delay {
+                        CaffeineBuilder
+                          .newBuilder()
+                          .expireAfterWrite(config.cache.ttl.length, config.cache.ttl.unit)
+                          .build[Rate.Pair, Rate]()
+                      })
+      cacheService = CacheServices.caffeine[F](caffeineCache)
+      module       = new Module[F](config, cacheService)
       _ <- BlazeServerBuilder[F](ec)
             .bindHttp(config.http.port, config.http.host)
             .withHttpApp(module.httpApp)
