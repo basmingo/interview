@@ -6,12 +6,13 @@ import forex.http.rates.RatesHttpRoutes
 import forex.programs._
 import forex.services._
 import org.http4s._
+import org.http4s.client.Client
 import org.http4s.implicits._
 import org.http4s.server.middleware.{AutoSlash, Timeout}
 
-class Module[F[_]: Concurrent: Timer](config: ApplicationConfig, cache: CacheService[F]) {
+class Module[F[_]: Concurrent: Timer](config: ApplicationConfig, cache: CacheService[F], client: Client[F]) {
 
-  private val ratesProvider = RatesServices.oneFrameStub[F](config.oneFrame.url)
+  private val ratesProvider = RatesServices.oneFrameStub[F](config.oneFrame.url, client)
 
   private val ratesService: RatesService[F] = RatesServices.live[F](cache, ratesProvider)
 

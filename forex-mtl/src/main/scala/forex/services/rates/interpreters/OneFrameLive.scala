@@ -6,7 +6,7 @@ import forex.domain.Rate
 import forex.services.cache.CacheAlgebra
 import forex.services.rates.Algebra
 import forex.services.rates.errors._
-import forex.services.rates.provider.{ Algebra => ProviderAlgebra }
+import forex.services.rates.provider.{ ProviderAlgebra => ProviderAlgebra }
 
 class OneFrameLive[F[_]: Monad](
     cache: CacheAlgebra[F],
