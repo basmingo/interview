@@ -19,5 +19,6 @@ case class CacheConfig(
 )
 
 case class OneFrameConfig(
-  url: String
+    url: String,
+    token: String
 )

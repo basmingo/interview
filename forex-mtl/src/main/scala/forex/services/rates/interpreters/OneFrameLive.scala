@@ -4,9 +4,9 @@ import cats.Monad
 import cats.implicits._
 import forex.domain.Rate
 import forex.services.cache.CacheAlgebra
+import forex.services.provider.ProviderAlgebra
 import forex.services.rates.Algebra
 import forex.services.rates.errors._
-import forex.services.rates.provider.{ ProviderAlgebra => ProviderAlgebra }
 
 class OneFrameLive[F[_]: Monad](
     cache: CacheAlgebra[F],
@@ -16,12 +16,20 @@ class OneFrameLive[F[_]: Monad](
   override def get(pair: Rate.Pair): F[Error Either Rate] =
     cache.get(pair).flatMap {
       case Some(rate) =>
-        (rate.asRight[Error]).pure[F]
+        rate.asRight[Error].pure[F]
 
       case None =>
-        provider.get(pair).flatMap {
-          case Right(rate) => cache.put(pair, rate).as(rate.asRight[Error])
-          case Left(error) => error.asLeft[Rate].pure[F]
-        }
+        provider
+          .get(List(pair))
+          .flatMap {
+            case Right(rates) if rates.contains(pair) =>
+              val rate = rates(pair)
+              cache.put(pair, rate).as(rate.asRight[Error])
+            case Right(_) =>
+              (Error.OneFrameLookupFailed(s"No rates returned for pair ${pair.from}-${pair.to}"): Error)
+                .asLeft[Rate]
+                .pure[F]
+            case Left(error) => error.asLeft[Rate].pure[F]
+          }
     }
 }

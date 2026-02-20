@@ -20,7 +20,13 @@ object Main extends IOApp {
 
 class Application[F[_]: ConcurrentEffect: Timer] {
 
-  def stream(ec: ExecutionContext): Stream[F, Unit] =
+  def stream(ec: ExecutionContext): Stream[F, Unit] = {
+    val serverStream = (httpApp: org.http4s.HttpApp[F], config: ApplicationConfig) =>
+      BlazeServerBuilder[F](ec)
+        .bindHttp(config.http.port, config.http.host)
+        .withHttpApp(httpApp)
+        .serve
+
     for {
       config <- Config.stream("app")
       httpClient <- Stream.resource(BlazeClientBuilder[F](ec).resource)
@@ -32,10 +38,7 @@ class Application[F[_]: ConcurrentEffect: Timer] {
                       })
       cacheService = CacheServices.caffeine[F](caffeineCache)
       module       = new Module[F](config, cacheService, httpClient)
-      _ <- BlazeServerBuilder[F](ec)
-            .bindHttp(config.http.port, config.http.host)
-            .withHttpApp(module.httpApp)
-            .serve
+      _ <- module.cacheUpdaterStream.concurrently(serverStream(module.httpApp, config))
     } yield ()
-
+  }
 }

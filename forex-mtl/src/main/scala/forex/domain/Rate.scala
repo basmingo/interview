@@ -11,4 +11,11 @@ object Rate {
       from: Currency,
       to: Currency
   )
+
+  def allPairs(currencies: List[Currency]): List[Pair] =
+    currencies.flatMap { from =>
+      currencies.collect {
+        case to if to != from => Pair(from, to)
+      }
+    }
 }

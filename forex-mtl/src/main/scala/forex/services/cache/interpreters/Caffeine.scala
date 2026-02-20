@@ -1,7 +1,7 @@
 package forex.services.cache.interpreters
 
 import cats.effect.Sync
-import com.github.benmanes.caffeine.cache.{Cache => CaffeineCache}
+import com.github.benmanes.caffeine.cache.{ Cache => CaffeineCache }
 import forex.domain.Rate
 import forex.services.cache.CacheAlgebra
 import scala.jdk.CollectionConverters._
