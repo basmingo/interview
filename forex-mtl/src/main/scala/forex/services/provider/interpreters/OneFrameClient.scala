@@ -65,6 +65,10 @@ class OneFrameClient[F[_]: Sync](
 
 object OneFrameClient {
 
+  private final case class OneFrameErrorResponse(
+      error: String
+  )
+
   private final case class OneFrameRateResponse(
       from: String,
       to: String,
@@ -73,13 +77,21 @@ object OneFrameClient {
   )
 
   private implicit val circeConfig: Configuration = Configuration.default.withSnakeCaseMemberNames
+  private implicit val oneFrameErrorDecoder: Decoder[OneFrameErrorResponse] =
+    deriveConfiguredDecoder[OneFrameErrorResponse]
   private implicit val oneFrameRateDecoder: Decoder[OneFrameRateResponse] =
     deriveConfiguredDecoder[OneFrameRateResponse]
 
   private def decodeAndConvert(payload: String): Either[String, Map[Rate.Pair, Rate]] =
-    decode[List[OneFrameRateResponse]](payload)
-      .leftMap(_.getMessage)
-      .flatMap(_.traverse(toRate).map(_.map(rate => rate.pair -> rate).toMap))
+    decode[OneFrameErrorResponse](payload) match {
+      case Right(error) =>
+        Left(error.error)
+
+      case Left(_) =>
+        decode[List[OneFrameRateResponse]](payload)
+          .leftMap(_.getMessage)
+          .flatMap(_.traverse(toRate).map(_.map(rate => rate.pair -> rate).toMap))
+    }
 
   private def toRate(response: OneFrameRateResponse): Either[String, Rate] =
     for {
