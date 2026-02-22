@@ -3,6 +3,7 @@ package forex.services.cache
 import cats.effect._
 import cats.implicits._
 import forex.domain.{ Currency, Rate }
+import forex.services.logging.Logger
 import forex.services.provider.ProviderAlgebra
 import fs2.Stream
 
@@ -10,7 +11,8 @@ import scala.concurrent.duration._
 
 class CacheRefreshJob[F[_]: Timer: Sync](
     provider: ProviderAlgebra[F],
-    cache: CacheAlgebra[F]
+    cache: CacheAlgebra[F],
+    logger: Logger[F]
 ) {
 
   private val refreshInterval = 4.minutes
@@ -20,9 +22,10 @@ class CacheRefreshJob[F[_]: Timer: Sync](
   private def refreshBatch(pairs: List[Rate.Pair]): F[Unit] =
     provider.get(pairs).flatMap {
       case Right(rates) =>
-        rates.values.toList.traverse_(rate => cache.put(rate.pair, rate))
+        logger.info(s"Cache refresh received ${rates.size} rates") *>
+          rates.values.toList.traverse_(rate => cache.put(rate.pair, rate))
       case Left(_) =>
-        Sync[F].unit
+        logger.warn("Cache refresh failed: provider returned lookup error")
     }
 
   def stream: Stream[F, Unit] =

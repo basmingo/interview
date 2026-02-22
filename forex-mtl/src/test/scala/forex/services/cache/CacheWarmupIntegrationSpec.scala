@@ -5,6 +5,7 @@ import cats.effect.Timer
 import cats.effect.concurrent.Ref
 import com.github.benmanes.caffeine.cache.{ Caffeine => CaffeineBuilder }
 import forex.domain.{ Currency, Rate }
+import forex.services.logging.LoggingInterpreters
 import forex.services.rates.interpreters.OneFrameLive
 import forex.testkit.Fixtures
 import org.scalatest.flatspec.AnyFlatSpec
@@ -32,7 +33,7 @@ class CacheWarmupIntegrationSpec extends AnyFlatSpec with Matchers {
       provider = Fixtures.countingProvider(providerCalls)(
         pairs => Right(pairs.map(p => p -> Fixtures.deterministicRate(p)).toMap)
       )
-      updater = new CacheRefreshJob[IO](provider, cache)
+      updater = new CacheRefreshJob[IO](provider, cache, LoggingInterpreters.noop[IO])
       _ <- updater.stream.take(1).compile.drain
       callsAfterWarmup <- providerCalls.get
       live = new OneFrameLive[IO](cache, provider)

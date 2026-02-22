@@ -14,10 +14,14 @@ import org.http4s.server.middleware.{AutoSlash, Timeout}
 
 class Module[F[_]: Concurrent: Timer](config: ApplicationConfig, cache: CacheService[F], client: Client[F]) {
 
-  private val ratesProvider = RatesServices.oneFrame[F](config.oneFrame.url, config.oneFrame.token, client)
+  private val oneFrameLogger: AppLogger[F] = LoggingServices.slf4j[F]("forex.oneframe-client")
+  private val cacheJobLogger: AppLogger[F] = LoggingServices.slf4j[F]("forex.cache-refresh")
+
+  private val ratesProvider =
+    RatesServices.oneFrame[F](config.oneFrame.url, config.oneFrame.token, client, oneFrameLogger)
 
   private val ratesService: RatesService[F] = RatesServices.live[F](cache, ratesProvider)
-  private val cacheUpdater: CacheRefreshJob[F] = new CacheRefreshJob[F](ratesProvider, cache)
+  private val cacheUpdater: CacheRefreshJob[F] = new CacheRefreshJob[F](ratesProvider, cache, cacheJobLogger)
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 

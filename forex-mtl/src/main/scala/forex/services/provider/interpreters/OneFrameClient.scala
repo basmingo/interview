@@ -5,6 +5,7 @@ import cats.syntax.either._
 import cats.syntax.show._
 import cats.syntax.traverse._
 import forex.domain._
+import forex.services.logging.Logger
 import forex.services.provider.ProviderAlgebra
 import forex.services.rates.errors._
 import io.circe.Decoder
@@ -19,7 +20,8 @@ import java.time.OffsetDateTime
 class OneFrameClient[F[_]: Sync](
     oneFrameUrl: String,
     token: String,
-    client: Client[F]
+    client: Client[F],
+    logger: Logger[F]
 ) extends ProviderAlgebra[F] {
 
   import OneFrameClient._
@@ -30,27 +32,37 @@ class OneFrameClient[F[_]: Sync](
     } else
       buildRatesUri(pairs) match {
         case Left(_) =>
-          Sync[F].pure(
-            Error
-              .OneFrameLookupFailed(s"Invalid one-frame URL: $oneFrameUrl")
-              .asLeft[Map[Rate.Pair, Rate]]
-          )
+          Sync[F]
+            .flatMap(logger.warn(s"One-frame URL is invalid: $oneFrameUrl")) { _ =>
+              Sync[F].pure(
+                (Error
+                  .OneFrameLookupFailed(s"Invalid one-frame URL: $oneFrameUrl"): Error)
+                  .asLeft[Map[Rate.Pair, Rate]]
+              )
+            }
 
         case Right(uri) =>
           val request = Request[F](method = Method.GET, uri = uri)
             .withHeaders("token" -> token)
-          Sync[F].map(
+          val fetchResult: F[Error Either Map[Rate.Pair, Rate]] = Sync[F].map(
             Sync[F]
               .attempt(client.expect[String](request))
           ) {
             case Left(err: Throwable) =>
-              Error
-                .OneFrameLookupFailed(s"Request to one-frame failed: ${err.getMessage}")
+              (Error
+                .OneFrameLookupFailed(s"Request to one-frame failed: ${err.getMessage}"): Error)
                 .asLeft[Map[Rate.Pair, Rate]]
 
             case Right(body: String) =>
               decodeAndConvert(body)
-                .leftMap(Error.OneFrameLookupFailed)
+                .leftMap(msg => (Error.OneFrameLookupFailed(msg): Error))
+          }
+
+          Sync[F].flatTap(fetchResult) {
+            case Left(Error.OneFrameLookupFailed(msg)) =>
+              logger.warn(s"One-frame lookup failed: $msg")
+            case Right(_) =>
+              Sync[F].unit
           }
       }
 
