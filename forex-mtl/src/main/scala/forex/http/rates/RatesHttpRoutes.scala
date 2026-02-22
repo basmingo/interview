@@ -2,18 +2,20 @@ package forex.http
 package rates
 
 import cats.effect.Sync
+import cats.syntax.apply._
 import cats.syntax.either._
 import cats.syntax.flatMap._
 import forex.programs.RatesProgram
 import forex.programs.rates.{ Protocol => RatesProgramProtocol }
 import forex.programs.rates.errors.Error
+import forex.services.AppMetrics
 import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 
 import java.util.UUID
 
-class RatesHttpRoutes[F[_]: Sync](rates: RatesProgram[F]) extends Http4sDsl[F] {
+class RatesHttpRoutes[F[_]: Sync](rates: RatesProgram[F], metrics: AppMetrics[F]) extends Http4sDsl[F] {
 
   import Converters._, QueryParams._, Protocol._
 
@@ -23,12 +25,15 @@ class RatesHttpRoutes[F[_]: Sync](rates: RatesProgram[F]) extends Http4sDsl[F] {
     case GET -> Root :? FromQueryParam(fromRaw) +& ToQueryParam(toRaw) =>
       validateRequest(fromRaw, toRaw) match {
         case Left(err) =>
-          BadRequest(err)
+          metrics.incrementCounter("http_requests_total", Map("route" -> "/rates", "status" -> "bad_request")) *>
+            BadRequest(err)
         case Right(request) =>
           rates.get(request).flatMap {
             case Right(rate) =>
-              Ok(rate.asGetApiResponse)
+              metrics.incrementCounter("http_requests_total", Map("route" -> "/rates", "status" -> "ok")) *>
+                Ok(rate.asGetApiResponse)
             case Left(Error.RateLookupFailed(msg)) =>
+              metrics.incrementCounter("http_requests_total", Map("route" -> "/rates", "status" -> "bad_gateway")) *>
               upstreamError("RATE_LOOKUP_FAILED", msg)
           }
       }

@@ -6,7 +6,7 @@ import cats.effect.concurrent.Ref
 import forex.domain.Rate
 import forex.services.cache.CacheAlgebra
 
-class InMemory[F[_]: Functor](
+class InMemoryCache[F[_]: Functor](
     store: Ref[F, Map[Rate.Pair, Rate]]
 ) extends CacheAlgebra[F] {
 

@@ -1,10 +1,12 @@
 package forex
 
 import cats.effect._
-import com.github.benmanes.caffeine.cache.{ Caffeine => CaffeineBuilder }
+import cats.effect.concurrent.Ref
+import com.github.benmanes.caffeine.cache.{Caffeine => CaffeineBuilder}
 import forex.config._
 import forex.domain.Rate
-import forex.services.CacheServices
+import forex.services.metrics.MetricsState
+import forex.services.{CacheServices, MetricsServices}
 import fs2.Stream
 import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.blaze.client.BlazeClientBuilder
@@ -36,8 +38,10 @@ class Application[F[_]: ConcurrentEffect: Timer] {
                           .expireAfterWrite(config.cache.ttl.length, config.cache.ttl.unit)
                           .build[Rate.Pair, Rate]()
                       })
+      metricsState <- Stream.eval(Ref.of[F, MetricsState](MetricsState.empty))
+      metrics = MetricsServices.inMemory[F](metricsState)
       cacheService = CacheServices.caffeine[F](caffeineCache)
-      module       = new Module[F](config, cacheService, httpClient)
+      module       = new Module[F](config, cacheService, httpClient, metrics)
       _ <- module.cacheUpdaterStream.concurrently(serverStream(module.httpApp, config))
     } yield ()
   }

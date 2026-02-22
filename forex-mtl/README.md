@@ -10,6 +10,7 @@ The key constraints that shaped the design were:
 - one-frame may return business errors as HTTP `200` with body like `{"error":"..."}`
 - rate freshness target is 5 minutes
 - expected traffic allows a single-instance in-memory cache approach
+- metrics supported on '/metrics' endpoint
 
 ## Key Principles
 1. Preserve and extend the existing architecture rather than rewrite it.
